@@ -1,4 +1,6 @@
-venv/
-uploads/
-__pycache__/
-.env
+
+#include <studio.h>
+int main{
+   printf("hellow world");
+   return 0;
+}
