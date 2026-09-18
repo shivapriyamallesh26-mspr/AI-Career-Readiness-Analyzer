@@ -12,6 +12,12 @@ UPLOAD_FOLDER = os.path.join(
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 
+def clean_text(text):
+    text = text.replace("\x7f", "")
+    text = text.replace("\n\n", "\n")
+    return text.strip()
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -22,14 +28,23 @@ def upload_resume():
     resume = request.files["resume"]
 
     if resume:
-        file_path = os.path.join(app.config["UPLOAD_FOLDER"], resume.filename)
+        file_path = os.path.join(
+            app.config["UPLOAD_FOLDER"],
+            resume.filename
+        )
+
         resume.save(file_path)
 
         reader = PdfReader(file_path)
         text = ""
 
         for page in reader.pages:
-            text += page.extract_text()
+            extracted_text = page.extract_text()
+
+            if extracted_text:
+                text += extracted_text
+
+        text = clean_text(text)
 
         return text
 
