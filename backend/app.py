@@ -44,6 +44,33 @@ def extract_skills(text):
     return skills
 
 
+def extract_education(text):
+    education = []
+
+    lines = text.splitlines()
+
+    for i, line in enumerate(lines):
+        if line.strip().upper() in ["QUALIFICATIONS", "EDUCATION"]:
+            for next_line in lines[i + 1:]:
+                if next_line.strip().upper() in [
+                    "SKILLS",
+                    "PROJECTS",
+                    "CERTIFICATIONS",
+                    "HOBBIES",
+                    "LANGUAGES KNOWN",
+                    "CAREER INTEREST",
+                    "DECLARATION"
+                ]:
+                    break
+
+                if next_line.strip():
+                    education.append(next_line.strip())
+
+            break
+
+    return education
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -73,8 +100,12 @@ def upload_resume():
         text = clean_text(text)
 
         skills = extract_skills(text)
+        education = extract_education(text)
 
-        return str(skills)
+        return str({
+            "skills": skills,
+            "education": education
+        })
 
     return "No resume selected."
 
