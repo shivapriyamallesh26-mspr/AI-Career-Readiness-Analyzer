@@ -122,6 +122,24 @@ def extract_certifications(text):
     return certifications
 
 
+def calculate_resume_score(skills, education, projects, certifications):
+    score = 0
+
+    if skills:
+        score += 25
+
+    if education:
+        score += 25
+
+    if projects:
+        score += 25
+
+    if certifications:
+        score += 25
+
+    return score
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -155,11 +173,19 @@ def upload_resume():
         projects = extract_projects(text)
         certifications = extract_certifications(text)
 
+        resume_score = calculate_resume_score(
+            skills,
+            education,
+            projects,
+            certifications
+        )
+
         return str({
             "skills": skills,
             "education": education,
             "projects": projects,
-            "certifications": certifications
+            "certifications": certifications,
+            "resume_score": resume_score
         })
 
     return "No resume selected."
