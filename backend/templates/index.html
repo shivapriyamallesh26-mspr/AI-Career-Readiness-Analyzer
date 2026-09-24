@@ -1,19 +1,901 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
     <title>AI Career Readiness Analyzer</title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1100px;
+            margin: 30px auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #222;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        .score {
+            font-size: 35px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        input[type="file"] {
+            margin: 10px 0 20px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 180px;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            resize: vertical;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        ul {
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .skill {
+            display: inline-block;
+            background: #eef2ff;
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 5px;
+        }
+
+        .matching {
+            color: green;
+            font-weight: bold;
+        }
+
+        .missing {
+            color: red;
+            font-weight: bold;
+        }
+
+        .priority-card {
+            border-left: 5px solid #f59e0b;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fffaf0;
+        }
+
+        .roadmap-card {
+            border-left: 5px solid #2563eb;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8faff;
+        }
+
+        .project-card {
+            border-left: 5px solid #16a34a;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f7fff8;
+        }
+
+        .interview-card {
+            border-left: 5px solid #7c3aed;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #faf7ff;
+        }
+
+        .improvement-card {
+            border-left: 5px solid #f97316;
+            padding: 18px;
+            margin-bottom: 15px;
+            background: #fffaf5;
+            border-radius: 6px;
+        }
+
+        .improvement-card h3 {
+            margin-top: 0;
+            color: #c2410c;
+        }
+
+        .example {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .priority-high {
+            color: red;
+            font-weight: bold;
+        }
+
+        .priority-medium {
+            color: orange;
+            font-weight: bold;
+        }
+
+        .priority-low {
+            color: green;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            color: #777;
+            padding: 20px;
+        }
+
+    </style>
+
 </head>
+
+
 <body>
 
-    <h1>AI Career Readiness Analyzer</h1>
+<div class="container">
 
-    <h2>Upload Your Resume</h2>
 
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <input type="file" name="resume" accept=".pdf" required>
+    <!-- ========================================= -->
+    <!-- HEADER -->
+    <!-- ========================================= -->
+
+    <h1>🤖 AI Career Readiness Analyzer</h1>
+
+    <p class="subtitle">
+        Analyze your resume, identify skill gaps,
+        and prepare for your target job.
+    </p>
+
+
+    <!-- ========================================= -->
+    <!-- UPLOAD SECTION -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>📄 Analyze Your Resume</h2>
+
+        <form
+            action="/upload"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+            <label>
+                <strong>Upload Resume (PDF)</strong>
+            </label>
+
+            <br>
+
+            <input
+                type="file"
+                name="resume"
+                accept=".pdf"
+                required
+            >
+
+            <br>
+
+            <label>
+                <strong>Target Job Description</strong>
+            </label>
+
+            <br><br>
+
+            <textarea
+                name="job_description"
+                placeholder="Paste the target job description here..."
+                required
+            ></textarea>
+
+            <br>
+
+            <button type="submit">
+                🚀 Analyze Resume
+            </button>
+
+        </form>
+
+    </div>
+
+
+    {% if resume_score is defined %}
+
+
+    <!-- ========================================= -->
+    <!-- ANALYSIS RESULTS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🎯 Analysis Results</h2>
+
+        <p>
+            Your resume has been successfully analyzed.
+        </p>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- RESUME SCORE -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>📄 Resume Score</h2>
+
+        <div class="score">
+            {{ resume_score }}%
+        </div>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- JOB MATCH -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🎯 Rule-Based Job Match</h2>
+
+        <div class="score">
+            {{ job_match_score }}%
+        </div>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- RESUME SKILLS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>💡 Skills in Resume</h2>
+
+        {% if resume_skills %}
+
+            {% for skill in resume_skills %}
+
+                <span class="skill">
+                    {{ skill }}
+                </span>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>No skills detected.</p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- REQUIRED JOB SKILLS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🎯 Required Job Skills</h2>
+
+        {% for skill in required_skills %}
+
+            <span class="skill">
+                {{ skill }}
+            </span>
+
+        {% endfor %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- MATCHING SKILLS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>✅ Matching Skills</h2>
+
+        {% if matching_skills %}
+
+            {% for skill in matching_skills %}
+
+                <p class="matching">
+                    ✓ {{ skill }}
+                </p>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>No matching skills detected.</p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- MISSING SKILLS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>❌ Missing Skills</h2>
+
+        {% if missing_skills %}
+
+            {% for skill in missing_skills %}
+
+                <p class="missing">
+                    ✗ {{ skill }}
+                </p>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>No major skill gaps detected.</p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- SKILL GAP -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>📊 Skill Gap</h2>
+
+        {% for skill in skill_gaps %}
+
+            <div>
+
+                <h3>{{ skill }}</h3>
+
+                <p>
+                    Status:
+                    <strong class="missing">
+                        Missing
+                    </strong>
+                </p>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- AI CAREER ANALYSIS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🤖 AI Career Analysis</h2>
+
+
+        <h3>📝 Career Summary</h3>
+
+        <p>
+            {{ career_summary }}
+        </p>
+
+
+        <h3>💪 AI-Identified Strengths</h3>
+
+        <ul>
+
+            {% for strength in strengths %}
+
+                <li>
+                    {{ strength }}
+                </li>
+
+            {% endfor %}
+
+        </ul>
+
+
+        <h3>💡 AI Recommendations</h3>
+
+        <ul>
+
+            {% for recommendation in recommendations %}
+
+                <li>
+                    {{ recommendation }}
+                </li>
+
+            {% endfor %}
+
+        </ul>
+
+
+        <h3>🎯 AI Readiness Level</h3>
+
+        <div class="score">
+
+            {{ readiness_level }}
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- AI JOB MATCH -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🎯 AI Job Match Analysis</h2>
+
+
+        <h3>Overall AI Match Score</h3>
+
+        <div class="score">
+
+            {{ ai_job_match.overall_score }}%
+
+        </div>
+
+
+        <p>
+            This score considers the relationship between
+            your skills, projects, education, soft skills,
+            and the target job.
+        </p>
+
+
+        <h3>💻 Technical Skill Match</h3>
+
+        <div class="score">
+
+            {{ ai_job_match.technical_skill_match }}%
+
+        </div>
+
+
+        <h3>📁 Project Relevance</h3>
+
+        <div class="score">
+
+            {{ ai_job_match.project_relevance }}%
+
+        </div>
+
+
+        <h3>🎓 Education Relevance</h3>
+
+        <div class="score">
+
+            {{ ai_job_match.education_relevance }}%
+
+        </div>
+
+
+        <h3>🤝 Soft Skill Match</h3>
+
+        <div class="score">
+
+            {{ ai_job_match.soft_skill_match }}%
+
+        </div>
+
+
+        <h3>📌 Match Explanation</h3>
+
+        <p>
+            {{ ai_job_match.explanation }}
+        </p>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- PRIORITY SKILL GAPS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>⚠️ Priority Skill Gaps</h2>
+
+        {% for item in priority_skill_gaps %}
+
+            <div class="priority-card">
+
+                <h3>
+                    {{ item.skill }}
+                </h3>
+
+                <p>
+
+                    <strong>Priority:</strong>
+
+                    {% if item.priority == "High" %}
+
+                        <span class="priority-high">
+                            {{ item.priority }}
+                        </span>
+
+                    {% elif item.priority == "Medium" %}
+
+                        <span class="priority-medium">
+                            {{ item.priority }}
+                        </span>
+
+                    {% else %}
+
+                        <span class="priority-low">
+                            {{ item.priority }}
+                        </span>
+
+                    {% endif %}
+
+                </p>
+
+                <p>
+                    <strong>Why it matters:</strong>
+                    {{ item.reason }}
+                </p>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- LEARNING ROADMAP -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>📚 Personalized Learning Roadmap</h2>
+
+        {% for item in roadmap %}
+
+            <div class="roadmap-card">
+
+                <h3>
+                    {{ item.skill }}
+                </h3>
+
+                <p>
+                    <strong>Priority:</strong>
+                    {{ item.priority }}
+                </p>
+
+                <ol>
+
+                    {% for step in item.action %}
+
+                        <li>
+                            {{ step }}
+                        </li>
+
+                    {% endfor %}
+
+                </ol>
+
+                <p>
+                    <strong>Estimated Time:</strong>
+                    {{ item.time }}
+                </p>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- RESUME IMPROVEMENT -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>📝 AI Resume Improvement</h2>
+
+        <p>
+            These suggestions are generated by comparing
+            your current resume with the target job description.
+        </p>
+
+
+        <!-- Missing Skills -->
+
+        <h3>🔴 Missing Skills to Add</h3>
+
+        {% if resume_improvement.missing_skills %}
+
+            <ul>
+
+                {% for skill in resume_improvement.missing_skills %}
+
+                    <li>
+                        {{ skill }}
+                    </li>
+
+                {% endfor %}
+
+            </ul>
+
+        {% else %}
+
+            <p>
+                No missing skills detected.
+            </p>
+
+        {% endif %}
+
+
+        <!-- Content Improvements -->
+
+        <h3>🟠 Resume Content Improvements</h3>
+
+        <ul>
+
+            {% for item in resume_improvement.content_improvements %}
+
+                <li>
+                    {{ item }}
+                </li>
+
+            {% endfor %}
+
+        </ul>
+
+
+        <!-- Project Improvements -->
+
+        <h3>🟡 Project Improvements</h3>
+
+        <ul>
+
+            {% for item in resume_improvement.project_improvements %}
+
+                <li>
+                    {{ item }}
+                </li>
+
+            {% endfor %}
+
+        </ul>
+
+
+        <!-- Resume Strengths -->
+
+        <h3>🟢 Resume Strengths</h3>
+
+        <ul>
+
+            {% for item in resume_improvement.resume_strengths %}
+
+                <li>
+                    {{ item }}
+                </li>
+
+            {% endfor %}
+
+        </ul>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- NEW SMART RESUME IMPROVEMENTS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>✨ Smart Resume Improvement Suggestions</h2>
+
+        <p>
+            These suggestions are generated by analyzing
+            the actual content of your resume and comparing
+            it with the target job.
+        </p>
+
+
+        {% if smart_improvements %}
+
+            {% for item in smart_improvements %}
+
+                <div class="improvement-card">
+
+                    <h3>
+                        💡 {{ item.title }}
+                    </h3>
+
+                    <p>
+                        {{ item.description }}
+                    </p>
+
+                    {% if item.example %}
+
+                        <div class="example">
+
+                            <strong>Example:</strong>
+
+                            {{ item.example }}
+
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>
+                No additional improvement suggestions found.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- RECOMMENDED PROJECTS -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>💻 Recommended Projects</h2>
+
+        {% for item in recommended_projects %}
+
+            <div class="project-card">
+
+                <h3>
+                    {{ item.skill }}
+                </h3>
+
+                <ul>
+
+                    {% for project in item.projects %}
+
+                        <li>
+                            {{ project }}
+                        </li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- INTERVIEW PREPARATION -->
+    <!-- ========================================= -->
+
+    <div class="card">
+
+        <h2>🎤 Interview Preparation</h2>
+
+        {% for item in interview_questions %}
+
+            <div class="interview-card">
+
+                <h3>
+                    {{ item.topic }}
+                </h3>
+
+                <ol>
+
+                    {% for question in item.questions %}
+
+                        <li>
+                            {{ question }}
+                        </li>
+
+                    {% endfor %}
+
+                </ol>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    {% endif %}
+
+
+    <!-- ========================================= -->
+    <!-- FOOTER -->
+    <!-- ========================================= -->
+
+    <div class="footer">
+
+        🤖 AI Career Readiness Analyzer
+
         <br><br>
-        <button type="submit">Upload Resume</button>
-    </form>
+
+        Built with Python, Flask, PyPDF2 and AI
+
+    </div>
+
+
+</div>
 
 </body>
+
 </html>
