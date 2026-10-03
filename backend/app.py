@@ -1,33 +1,14 @@
 from flask import Flask, render_template, request
-
 from PyPDF2 import PdfReader
-
+from dotenv import load_dotenv
+from openai import OpenAI
 import os
 import re
 
-from dotenv import load_dotenv
-from openai import OpenAI
-
-
-# --------------------------------------------------
-# FLASK SETUP
-# --------------------------------------------------
-
 app = Flask(__name__)
-
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-client = None
-
-if OPENAI_API_KEY:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-
-
-# --------------------------------------------------
-# UPLOAD FOLDER
-# --------------------------------------------------
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
 
 UPLOAD_FOLDER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -74,18 +55,20 @@ KNOWN_SKILLS = [
 # PDF TEXT EXTRACTION
 # --------------------------------------------------
 
-def extract_pdf_text(pdf_path):
+def extract_pdf_text(path):
 
     text = ""
 
     try:
-        reader = PdfReader(pdf_path)
+
+        reader = PdfReader(path)
 
         for page in reader.pages:
 
             page_text = page.extract_text()
 
             if page_text:
+
                 text += page_text + "\n"
 
     except Exception as e:
@@ -106,7 +89,6 @@ def clean_text(text):
 
     text = text.replace("\x7f", "")
 
-    # Remove multiple blank lines
     text = re.sub(
         r"\n\s*\n+",
         "\n",
@@ -124,16 +106,11 @@ def extract_skills(text):
 
     text_lower = text.lower()
 
-    skills = []
-
-    for skill in KNOWN_SKILLS:
-
-        skill_lower = skill.lower()
-
-        if skill_lower in text_lower:
-            skills.append(skill)
-
-    return skills
+    return [
+        skill
+        for skill in KNOWN_SKILLS
+        if skill.lower() in text_lower
+    ]
 
 
 # --------------------------------------------------
@@ -142,7 +119,7 @@ def extract_skills(text):
 
 def extract_education(text):
 
-    education_keywords = [
+    keywords = [
         "b.tech",
         "btech",
         "b.e",
@@ -159,26 +136,21 @@ def extract_education(text):
         "ssc"
     ]
 
-    lines = text.split("\n")
-
     education = []
 
-    for line in lines:
+    for line in text.split("\n"):
 
-        line_clean = line.strip()
+        line = line.strip()
 
-        if not line_clean:
+        if not line:
             continue
 
-        line_lower = line_clean.lower()
+        if any(
+            keyword in line.lower()
+            for keyword in keywords
+        ):
 
-        for keyword in education_keywords:
-
-            if keyword in line_lower:
-
-                education.append(line_clean)
-
-                break
+            education.append(line)
 
     return education
 
@@ -189,51 +161,47 @@ def extract_education(text):
 
 def extract_projects(text):
 
-    lines = text.split("\n")
-
     projects = []
 
-    project_section = False
+    active = False
 
-    for line in lines:
+    stop_words = [
+        "education",
+        "certification",
+        "experience",
+        "skills",
+        "achievement",
+        "internship",
+        "coursework"
+    ]
 
-        line_clean = line.strip()
+    for line in text.split("\n"):
 
-        if not line_clean:
+        line = line.strip()
+
+        if not line:
             continue
 
-        line_lower = line_clean.lower()
+        lower = line.lower()
 
-        if "project" in line_lower:
+        if "project" in lower:
 
-            project_section = True
+            active = True
 
             continue
 
-        if project_section:
-
-            stop_words = [
-                "education",
-                "certification",
-                "experience",
-                "skills",
-                "achievement",
-                "internship",
-                "coursework"
-            ]
+        if active:
 
             if any(
-                word in line_lower
+                word in lower
                 for word in stop_words
             ):
 
-                project_section = False
+                active = False
 
-                continue
+            elif len(line) > 5:
 
-            if len(line_clean) > 5:
-
-                projects.append(line_clean)
+                projects.append(line)
 
     return projects[:10]
 
@@ -244,53 +212,49 @@ def extract_projects(text):
 
 def extract_certifications(text):
 
-    lines = text.split("\n")
-
     certifications = []
 
-    certification_section = False
+    active = False
 
-    for line in lines:
+    stop_words = [
+        "education",
+        "project",
+        "experience",
+        "skills",
+        "achievement",
+        "internship"
+    ]
 
-        line_clean = line.strip()
+    for line in text.split("\n"):
 
-        if not line_clean:
+        line = line.strip()
+
+        if not line:
             continue
 
-        line_lower = line_clean.lower()
+        lower = line.lower()
 
         if (
-            "certification" in line_lower
-            or "certificate" in line_lower
+            "certification" in lower
+            or "certificate" in lower
         ):
 
-            certification_section = True
+            active = True
 
             continue
 
-        if certification_section:
-
-            stop_words = [
-                "education",
-                "project",
-                "experience",
-                "skills",
-                "achievement",
-                "internship"
-            ]
+        if active:
 
             if any(
-                word in line_lower
+                word in lower
                 for word in stop_words
             ):
 
-                certification_section = False
+                active = False
 
-                continue
+            elif len(line) > 5:
 
-            if len(line_clean) > 5:
-
-                certifications.append(line_clean)
+                certifications.append(line)
 
     return certifications[:10]
 
@@ -299,21 +263,15 @@ def extract_certifications(text):
 # JOB SKILL EXTRACTION
 # --------------------------------------------------
 
-def extract_job_skills(job_description):
+def extract_job_skills(job):
 
-    text_lower = job_description.lower()
+    lower = job.lower()
 
-    skills = []
-
-    for skill in KNOWN_SKILLS:
-
-        skill_lower = skill.lower()
-
-        if skill_lower in text_lower:
-
-            skills.append(skill)
-
-    return skills
+    return [
+        skill
+        for skill in KNOWN_SKILLS
+        if skill.lower() in lower
+    ]
 
 
 # --------------------------------------------------
@@ -321,27 +279,22 @@ def extract_job_skills(job_description):
 # --------------------------------------------------
 
 def calculate_job_match(
-    resume_skills,
-    job_skills
+    resume,
+    job
 ):
 
-    if not job_skills:
+    if not job:
         return 0
 
-    matching_skills = []
+    matching = [
+        skill
+        for skill in job
+        if skill in resume
+    ]
 
-    for skill in job_skills:
-
-        if skill in resume_skills:
-
-            matching_skills.append(skill)
-
-    score = (
-        len(matching_skills)
-        / len(job_skills)
-    ) * 100
-
-    return round(score)
+    return round(
+        len(matching) / len(job) * 100
+    )
 
 
 # --------------------------------------------------
@@ -349,343 +302,140 @@ def calculate_job_match(
 # --------------------------------------------------
 
 def generate_skill_gaps(
-    resume_skills,
-    job_skills
+    resume,
+    job
 ):
 
-    missing_skills = []
-
-    for skill in job_skills:
-
-        if skill not in resume_skills:
-
-            missing_skills.append(skill)
-
-    return missing_skills
+    return [
+        skill
+        for skill in job
+        if skill not in resume
+    ]
 
 
 # --------------------------------------------------
-# IMPROVED RESUME SCORE
+# RESUME SCORE
 # --------------------------------------------------
 
 def calculate_resume_score(
-    resume_skills,
-    job_skills,
+    resume,
+    job,
     education,
     projects,
     certifications
 ):
 
-    # --------------------------------------------------
-    # 1. TECHNICAL SKILLS - 40%
-    # --------------------------------------------------
+    if job:
 
-    if resume_skills:
-
-        if job_skills:
-
-            matching_skills = [
-                skill
-                for skill in job_skills
-                if skill in resume_skills
-            ]
-
-            technical_percentage = (
-                len(matching_skills)
-                / len(job_skills)
-            ) * 100
-
-        else:
-
-            technical_percentage = 100
+        technical = calculate_job_match(
+            resume,
+            job
+        )
 
     else:
 
-        technical_percentage = 0
-
-    technical_score = (
-        technical_percentage * 0.40
-    )
-
-
-    # --------------------------------------------------
-    # 2. JOB SKILL MATCH - 25%
-    # --------------------------------------------------
+        technical = 100 if resume else 0
 
     job_match = calculate_job_match(
-        resume_skills,
-        job_skills
+        resume,
+        job
     )
 
-    job_match_score = (
-        job_match * 0.25
-    )
+    project_score = 100 if projects else 0
 
+    education_score = 100 if education else 0
 
-    # --------------------------------------------------
-    # 3. PROJECTS - 15%
-    # --------------------------------------------------
-
-    if projects:
-
-        project_percentage = 100
-
-    else:
-
-        project_percentage = 0
-
-    project_score = (
-        project_percentage * 0.15
-    )
-
-
-    # --------------------------------------------------
-    # 4. EDUCATION - 10%
-    # --------------------------------------------------
-
-    if education:
-
-        education_percentage = 100
-
-    else:
-
-        education_percentage = 0
-
-    education_score = (
-        education_percentage * 0.10
-    )
-
-
-    # --------------------------------------------------
-    # 5. CERTIFICATIONS - 10%
-    # --------------------------------------------------
-
-    if certifications:
-
-        certification_percentage = 100
-
-    else:
-
-        certification_percentage = 0
-
-    certification_score = (
-        certification_percentage * 0.10
-    )
-
-
-    # --------------------------------------------------
-    # FINAL SCORE
-    # --------------------------------------------------
+    certification_score = 100 if certifications else 0
 
     final_score = (
-        technical_score
-        + job_match_score
-        + project_score
-        + education_score
-        + certification_score
+
+        technical * 0.40
+
+        + job_match * 0.25
+
+        + project_score * 0.15
+
+        + education_score * 0.10
+
+        + certification_score * 0.10
+
     )
 
     return round(final_score)
 
 
 # --------------------------------------------------
-# AI JOB MATCH
-# --------------------------------------------------
-
-def generate_ai_job_match(
-    resume_skills,
-    job_skills,
-    projects,
-    education
-):
-
-    matching_skills = [
-        skill
-        for skill in job_skills
-        if skill in resume_skills
-    ]
-
-    if job_skills:
-
-        technical_match = round(
-            (
-                len(matching_skills)
-                / len(job_skills)
-            ) * 100
-        )
-
-    else:
-
-        technical_match = 0
-
-
-    if projects:
-
-        project_relevance = 70
-
-    else:
-
-        project_relevance = 30
-
-
-    if education:
-
-        education_relevance = 80
-
-    else:
-
-        education_relevance = 30
-
-
-    soft_skill_names = [
-        "Communication",
-        "Teamwork"
-    ]
-
-    soft_skill_matches = [
-        skill
-        for skill in soft_skill_names
-        if skill in resume_skills
-    ]
-
-    if soft_skill_matches:
-
-        soft_skill_match = round(
-            (
-                len(soft_skill_matches)
-                / len(soft_skill_names)
-            ) * 100
-        )
-
-    else:
-
-        soft_skill_match = 0
-
-
-    overall_score = round(
-        (
-            technical_match
-            + project_relevance
-            + education_relevance
-            + soft_skill_match
-        ) / 4
-    )
-
-
-    if technical_match >= 75:
-
-        explanation = (
-            "Your resume shows strong technical alignment "
-            "with the target role. Continue improving "
-            "project depth and practical experience."
-        )
-
-    elif technical_match >= 50:
-
-        explanation = (
-            "Your resume has a reasonable technical "
-            "foundation for the target role, but several "
-            "skills can still be improved."
-        )
-
-    else:
-
-        explanation = (
-            "Your resume has a foundation for the target "
-            "role, but several required technical skills "
-            "are still missing. Focus on the priority "
-            "skill gaps and add practical projects that "
-            "demonstrate those skills."
-        )
-
-
-    return {
-
-        "overall_score": overall_score,
-
-        "technical_skill_match": technical_match,
-
-        "project_relevance": project_relevance,
-
-        "education_relevance": education_relevance,
-
-        "soft_skill_match": soft_skill_match,
-
-        "explanation": explanation
-    }
-
-
-# --------------------------------------------------
 # PRIORITY SKILL GAPS
 # --------------------------------------------------
 
-def generate_priority_skill_gaps(
-    missing_skills
-):
-
-    priority_gaps = []
-
-    high_priority = [
-        "Python",
-        "HTML",
-        "CSS",
-        "Git",
-        "GitHub",
-        "Flask"
-    ]
-
-    medium_priority = [
-        "PDF Processing",
-        "OpenAI API",
-        "Data Analysis",
-        "SQL",
-        "Machine Learning"
-    ]
-
-    reasons = {
-
-        "Python":
-            "Python is a core requirement for developing the target applications.",
-
-        "HTML":
-            "HTML is needed to build the web interface.",
-
-        "CSS":
-            "CSS is needed to create a usable web application interface.",
-
-        "Git":
-            "Git is important for version control and collaborative development.",
-
-        "GitHub":
-            "GitHub is useful for managing and showcasing development projects.",
-
-        "Flask":
-            "Flask is required for Python-based web application development.",
-
-        "PDF Processing":
-            "PDF processing is directly related to resume and document analysis.",
-
-        "OpenAI API":
-            "OpenAI API knowledge is useful for integrating AI features.",
-
-        "Data Analysis":
-            "Data analysis is useful for processing and understanding application data.",
-
-        "SQL":
-            "SQL is useful for storing and analyzing structured application data.",
-
-        "Machine Learning":
-            "Machine learning concepts can support AI-powered application development."
-    }
+HIGH_PRIORITY = {
+    "Python",
+    "HTML",
+    "CSS",
+    "Git",
+    "GitHub",
+    "Flask"
+}
 
 
-    for skill in missing_skills:
+MEDIUM_PRIORITY = {
+    "PDF Processing",
+    "OpenAI API",
+    "Data Analysis",
+    "SQL",
+    "Machine Learning"
+}
 
-        if skill in high_priority:
+
+PRIORITY_REASONS = {
+
+    "Python":
+        "Python is a core requirement for developing the target applications.",
+
+    "HTML":
+        "HTML is needed to build the web interface.",
+
+    "CSS":
+        "CSS is needed to create a usable web application interface.",
+
+    "Git":
+        "Git is important for version control and collaborative development.",
+
+    "GitHub":
+        "GitHub is useful for managing and showcasing development projects.",
+
+    "Flask":
+        "Flask is required for Python-based web application development.",
+
+    "PDF Processing":
+        "PDF processing is directly related to resume and document analysis.",
+
+    "OpenAI API":
+        "OpenAI API knowledge is useful for integrating AI features.",
+
+    "Data Analysis":
+        "Data analysis is useful for processing and understanding application data.",
+
+    "SQL":
+        "SQL is useful for storing and analyzing structured application data.",
+
+    "Machine Learning":
+        "Machine learning concepts can support AI-powered application development."
+
+}
+
+
+def generate_priority_skill_gaps(missing):
+
+    result = []
+
+    for skill in missing:
+
+        if skill in HIGH_PRIORITY:
 
             priority = "High"
 
-        elif skill in medium_priority:
+        elif skill in MEDIUM_PRIORITY:
 
             priority = "Medium"
 
@@ -693,312 +443,318 @@ def generate_priority_skill_gaps(
 
             priority = "Low"
 
-
-        priority_gaps.append({
+        result.append({
 
             "skill": skill,
 
             "priority": priority,
 
-            "reason": reasons.get(
+            "reason": PRIORITY_REASONS.get(
                 skill,
                 f"{skill} is relevant to the target job."
             )
+
         })
 
-
-    return priority_gaps
+    return result
 
 
 # --------------------------------------------------
 # PERSONALIZED LEARNING ROADMAP
 # --------------------------------------------------
 
-def generate_learning_roadmap(
-    missing_skills
-):
+ROADMAP = {
+
+    "Python": (
+        "High",
+        "1–2 weeks",
+        "Python is a core requirement for the target role.",
+        [
+            "Learn variables, data types, operators and conditions.",
+            "Practice loops, functions, lists and dictionaries.",
+            "Learn file handling and basic error handling."
+        ],
+        "Build a Student Performance Analyzer using Python.",
+        "Build at least one working Python project."
+    ),
+
+    "HTML": (
+        "High",
+        "4–5 days",
+        "HTML is required to create the structure of web applications.",
+        [
+            "Learn headings, paragraphs, links, images and forms.",
+            "Practice semantic HTML elements.",
+            "Create a structured web page."
+        ],
+        "Build a personal portfolio webpage.",
+        "Create one complete HTML webpage."
+    ),
+
+    "CSS": (
+        "High",
+        "5–7 days",
+        "CSS is required to design and style web applications.",
+        [
+            "Learn selectors, colors, spacing and the box model.",
+            "Practice Flexbox and responsive design.",
+            "Create mobile-friendly layouts."
+        ],
+        "Build a responsive career dashboard.",
+        "Create a responsive webpage that works on mobile and desktop."
+    ),
+
+    "Git": (
+        "High",
+        "3–4 days",
+        "Git is important for version control and software development.",
+        [
+            "Learn git init, status, add and commit.",
+            "Practice branches and merging.",
+            "Use Git regularly while developing projects."
+        ],
+        "Maintain your projects using Git.",
+        "Be able to create commits, branches and merge changes."
+    ),
+
+    "GitHub": (
+        "High",
+        "2–3 days",
+        "GitHub helps you showcase projects and collaborate with developers.",
+        [
+            "Learn repositories and README files.",
+            "Practice push, pull and cloning.",
+            "Create a professional project repository."
+        ],
+        "Create a professional GitHub portfolio.",
+        "Upload your major projects with proper README files."
+    ),
+
+    "Flask": (
+        "High",
+        "5–7 days",
+        "Flask is required for Python-based web application development.",
+        [
+            "Learn Flask application structure.",
+            "Practice routes and HTTP methods.",
+            "Learn templates, forms and POST requests."
+        ],
+        "Build a Flask-based Student Management System.",
+        "Create a working Flask web application."
+    ),
+
+    "PDF Processing": (
+        "Medium",
+        "3–4 days",
+        "PDF processing is directly related to your resume analyzer.",
+        [
+            "Understand basic PDF file handling.",
+            "Learn text extraction using PyPDF2.",
+            "Handle PDFs that contain missing or empty text."
+        ],
+        "Build a PDF Resume Text Extractor.",
+        "Extract and display text from uploaded PDF files."
+    ),
+
+    "OpenAI API": (
+        "Medium",
+        "3–5 days",
+        "AI APIs are useful for building AI-powered applications.",
+        [
+            "Understand APIs and request-response flow.",
+            "Learn how API keys are used securely.",
+            "Practice sending prompts to an AI API."
+        ],
+        "Build an AI Interview Question Generator.",
+        "Create one application that integrates an AI API."
+    ),
+
+    "Data Analysis": (
+        "Medium",
+        "5–7 days",
+        "Data analysis helps in understanding and processing structured data.",
+        [
+            "Learn data cleaning concepts.",
+            "Practice working with tables and datasets.",
+            "Learn basic analysis and visualization."
+        ],
+        "Build a Student Performance Analysis project.",
+        "Analyze a dataset and present useful insights."
+    ),
+
+    "SQL": (
+        "Medium",
+        "1 week",
+        "SQL is useful for storing and retrieving structured application data.",
+        [
+            "Learn SELECT, INSERT, UPDATE and DELETE.",
+            "Practice WHERE, ORDER BY and GROUP BY.",
+            "Learn JOIN and basic database design."
+        ],
+        "Build a College Database Management System.",
+        "Create a database project with multiple related tables."
+    ),
+
+    "Machine Learning": (
+        "Medium",
+        "2–3 weeks",
+        "Machine learning concepts support AI-powered applications.",
+        [
+            "Learn supervised and unsupervised learning.",
+            "Understand training and testing data.",
+            "Learn basic classification and regression."
+        ],
+        "Build a Student Performance Prediction system.",
+        "Train and test one basic machine learning model."
+    ),
+
+    "MongoDB": (
+        "Low",
+        "4–7 days",
+        "MongoDB can be useful for storing flexible application data.",
+        [
+            "Learn databases, collections and documents.",
+            "Practice CRUD operations.",
+            "Connect MongoDB with a web application."
+        ],
+        "Build a MongoDB-based Job Application Tracker.",
+        "Create an application that stores and retrieves data from MongoDB."
+    ),
+
+    "MySQL": (
+        "Low",
+        "4–7 days",
+        "MySQL is useful for relational database applications.",
+        [
+            "Learn tables, rows and columns.",
+            "Practice CRUD operations.",
+            "Connect MySQL with a small application."
+        ],
+        "Build a Student Attendance Management System.",
+        "Create a working database-based application."
+    ),
+
+    "Java": (
+        "Medium",
+        "1–2 weeks",
+        "Java is useful for object-oriented programming and software development.",
+        [
+            "Practice classes and objects.",
+            "Learn inheritance and polymorphism.",
+            "Practice arrays, strings and collections."
+        ],
+        "Build a Java Student Management System.",
+        "Create one complete Java OOP project."
+    ),
+
+    "C++": (
+        "Medium",
+        "1–2 weeks",
+        "C++ strengthens programming and problem-solving skills.",
+        [
+            "Practice functions and arrays.",
+            "Learn classes and objects.",
+            "Practice STL and basic data structures."
+        ],
+        "Build a C++ Quiz Application.",
+        "Create a complete C++ console project."
+    ),
+
+    "JavaScript": (
+        "Medium",
+        "1–2 weeks",
+        "JavaScript adds interactivity to web applications.",
+        [
+            "Learn variables, functions and arrays.",
+            "Practice DOM manipulation.",
+            "Learn events and form handling."
+        ],
+        "Build an interactive career dashboard.",
+        "Create a webpage with JavaScript-based interactions."
+    )
+
+}
+
+
+def generate_learning_roadmap(missing):
 
     roadmap = []
 
-    roadmap_data = {
-
-        "Python": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Learn Python syntax, variables, data types and operators.",
-
-                "Practice functions, lists, dictionaries, loops and file handling.",
-
-                "Build a small Python project such as an expense tracker."
-            ],
-
-            "time": "1–2 weeks"
-        },
-
-
-        "HTML": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Learn HTML structure, headings, paragraphs, links and forms.",
-
-                "Practice semantic HTML and form elements.",
-
-                "Build a simple personal portfolio webpage."
-            ],
-
-            "time": "4–5 days"
-        },
-
-
-        "CSS": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Learn selectors, properties, box model and positioning.",
-
-                "Practice Flexbox and responsive layouts.",
-
-                "Design a responsive portfolio or career dashboard."
-            ],
-
-            "time": "5–7 days"
-        },
-
-
-        "Git": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Learn git init, add, commit, status and log.",
-
-                "Practice branches, merging and resolving conflicts.",
-
-                "Use Git for every project you build."
-            ],
-
-            "time": "3–4 days"
-        },
-
-
-        "GitHub": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Create and configure a professional GitHub profile.",
-
-                "Learn repositories, push, pull and branches.",
-
-                "Add README files and documentation to your projects."
-            ],
-
-            "time": "2–3 days"
-        },
-
-
-        "Flask": {
-
-            "priority": "High",
-
-            "action": [
-
-                "Learn Flask application structure and routes.",
-
-                "Practice templates, forms and handling POST requests.",
-
-                "Build a small Flask web application."
-            ],
-
-            "time": "5–7 days"
-        },
-
-
-        "PDF Processing": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Understand how PDF files are structured.",
-
-                "Learn how to extract text from PDFs using PyPDF2.",
-
-                "Build a small PDF text extraction application."
-            ],
-
-            "time": "3–4 days"
-        },
-
-
-        "OpenAI API": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Understand APIs, API keys and request/response flow.",
-
-                "Learn how to send prompts to an AI API.",
-
-                "Integrate an AI API into a small Flask project."
-            ],
-
-            "time": "3–5 days"
-        },
-
-
-        "Data Analysis": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Learn basic data cleaning and analysis concepts.",
-
-                "Practice working with structured data.",
-
-                "Build a simple student or resume data analysis project."
-            ],
-
-            "time": "5–7 days"
-        },
-
-
-        "SQL": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Learn SELECT, INSERT, UPDATE and DELETE.",
-
-                "Practice WHERE, JOIN, GROUP BY and ORDER BY.",
-
-                "Build a small database-based project."
-            ],
-
-            "time": "1 week"
-        },
-
-
-        "Machine Learning": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Learn basic machine learning concepts.",
-
-                "Study supervised and unsupervised learning.",
-
-                "Build a simple machine learning project."
-            ],
-
-            "time": "2–3 weeks"
-        },
-
-
-        "Java": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Learn Java syntax, classes and objects.",
-
-                "Practice arrays, strings and collections.",
-
-                "Build a small Java application."
-            ],
-
-            "time": "1–2 weeks"
-        },
-
-
-        "C++": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Practice C++ syntax and functions.",
-
-                "Learn classes, objects and STL basics.",
-
-                "Build a small C++ project."
-            ],
-
-            "time": "1–2 weeks"
-        },
-
-
-        "JavaScript": {
-
-            "priority": "Medium",
-
-            "action": [
-
-                "Learn variables, functions and DOM basics.",
-
-                "Practice events and form handling.",
-
-                "Build an interactive webpage."
-            ],
-
-            "time": "1–2 weeks"
-        }
-
-    }
-
-
-    for skill in missing_skills:
-
-        if skill in roadmap_data:
-
-            data = roadmap_data[skill]
-
-            roadmap.append({
-
-                "skill": skill,
-
-                "priority": data["priority"],
-
-                "action": data["action"],
-
-                "time": data["time"]
-            })
+    for skill in missing:
+
+        if skill in ROADMAP:
+
+            (
+                priority,
+                time,
+                why,
+                action,
+                project,
+                goal
+            ) = ROADMAP[skill]
 
         else:
 
-            roadmap.append({
+            priority = "Low"
 
-                "skill": skill,
+            time = "1 week"
 
-                "priority": "Low",
+            why = (
+                f"{skill} is relevant to the target job."
+            )
 
-                "action": [
+            action = [
+                f"Learn the basic concepts of {skill}.",
+                f"Practice {skill} using small exercises.",
+                f"Build a small project using {skill}."
+            ]
 
-                    f"Learn the basic concepts of {skill}.",
+            project = (
+                f"Build a small project using {skill}."
+            )
 
-                    f"Practice {skill} using small exercises.",
+            goal = (
+                f"Demonstrate basic practical knowledge of {skill}."
+            )
 
-                    f"Build a small project using {skill}."
-                ],
+        roadmap.append({
 
-                "time": "1 week"
-            })
+            "skill": skill,
 
+            "priority": priority,
+
+            "time": time,
+
+            "why": why,
+
+            "action": action,
+
+            "project": project,
+
+            "goal": goal
+
+        })
+
+    priority_order = {
+        "High": 1,
+        "Medium": 2,
+        "Low": 3
+    }
+
+    roadmap.sort(
+        key=lambda item:
+        priority_order.get(
+            item["priority"],
+            3
+        )
+    )
+
+    for index, item in enumerate(
+        roadmap,
+        start=1
+    ):
+
+        item["order"] = index
 
     return roadmap
 
@@ -1007,290 +763,210 @@ def generate_learning_roadmap(
 # RECOMMENDED PROJECTS
 # --------------------------------------------------
 
-def generate_recommended_projects(
-    missing_skills
-):
+PROJECTS = {
 
-    project_ideas = {
+    "Python": [
+        "Build a Student Performance Analyzer using Python.",
+        "Create a Python-based Expense Tracker."
+    ],
 
-        "Python": [
+    "HTML": [
+        "Build a responsive student portfolio website.",
+        "Create an online resume webpage."
+    ],
 
-            "Build a Student Performance Analyzer using Python.",
+    "CSS": [
+        "Design a responsive portfolio using CSS Flexbox.",
+        "Create a responsive career dashboard."
+    ],
 
-            "Create a Python-based Expense Tracker."
-        ],
+    "SQL": [
+        "Build a College Database Management System.",
+        "Create a Student Attendance Database."
+    ],
 
-        "HTML": [
+    "Git": [
+        "Create a Git-based version-controlled college project.",
+        "Practice collaborative development using branches."
+    ],
 
-            "Build a responsive student portfolio website.",
+    "GitHub": [
+        "Create a professional GitHub portfolio.",
+        "Maintain project README files and documentation."
+    ],
 
-            "Create an online resume webpage."
-        ],
+    "Flask": [
+        "Build a Student Management System using Flask.",
+        "Create a Flask-based Job Application Tracker."
+    ],
 
-        "CSS": [
+    "PDF Processing": [
+        "Build a PDF Resume Text Extractor.",
+        "Create a Document Analysis application."
+    ],
 
-            "Design a responsive portfolio using CSS Flexbox.",
+    "OpenAI API": [
+        "Build an AI Resume Feedback application.",
+        "Create an AI-powered Interview Question Generator."
+    ],
 
-            "Create a responsive career dashboard."
-        ],
+    "Machine Learning": [
+        "Build a Student Performance Prediction system.",
+        "Create a simple Resume Classification model."
+    ],
 
-        "SQL": [
+    "Data Analysis": [
+        "Build a Student Performance Dashboard.",
+        "Create a Resume Skill Analysis system."
+    ],
 
-            "Build a College Database Management System.",
+    "MongoDB": [
+        "Build a Student Management System using MongoDB.",
+        "Create a MongoDB-based Job Application Tracker."
+    ],
 
-            "Create a Student Attendance Database."
-        ],
+    "MySQL": [
+        "Build a College Database Management System using MySQL.",
+        "Create a Student Attendance Management System using MySQL."
+    ]
 
-        "Git": [
-
-            "Create a Git-based version-controlled college project.",
-
-            "Practice collaborative development using branches."
-        ],
-
-        "GitHub": [
-
-            "Create a professional GitHub portfolio.",
-
-            "Maintain project README files and documentation."
-        ],
-
-        "Flask": [
-
-            "Build a Student Management System using Flask.",
-
-            "Create a Flask-based Job Application Tracker."
-        ],
-
-        "PDF Processing": [
-
-            "Build a PDF Resume Text Extractor.",
-
-            "Create a Document Analysis application."
-        ],
-
-        "OpenAI API": [
-
-            "Build an AI Resume Feedback application.",
-
-            "Create an AI-powered Interview Question Generator."
-        ],
-
-        "Machine Learning": [
-
-            "Build a Student Performance Prediction system.",
-
-            "Create a simple Resume Classification model."
-        ],
-
-        "Data Analysis": [
-
-            "Build a Student Performance Dashboard.",
-
-            "Create a Resume Skill Analysis system."
-        ],
-
-        "MongoDB": [
-
-            "Build a Student Management System using MongoDB.",
-
-            "Create a MongoDB-based Job Application Tracker."
-        ],
-
-        "MySQL": [
-
-            "Build a College Database Management System using MySQL.",
-
-            "Create a Student Attendance Management System using MySQL."
-        ]
-
-    }
+}
 
 
-    projects = []
+def generate_recommended_projects(missing):
 
-    for skill in missing_skills:
+    return [
 
-        if skill in project_ideas:
+        {
+            "skill": skill,
+            "projects": PROJECTS[skill]
+        }
 
-            projects.append({
+        for skill in missing
+        if skill in PROJECTS
 
-                "skill": skill,
-
-                "projects": project_ideas[skill]
-            })
-
-
-    return projects
+    ]
 
 
 # --------------------------------------------------
 # INTERVIEW QUESTIONS
 # --------------------------------------------------
 
-def generate_interview_questions(
-    missing_skills
-):
-
-    question_data = {
-
-        "Python": [
-
-            "What are the main features of Python?",
-
-            "What is the difference between a list and a tuple?",
-
-            "What are functions in Python?"
-        ],
-
-        "HTML": [
-
-            "What is HTML?",
-
-            "What are semantic HTML elements?",
-
-            "What is the difference between div and section?"
-        ],
-
-        "CSS": [
-
-            "What is CSS?",
-
-            "What is Flexbox?",
-
-            "What is responsive web design?"
-        ],
-
-        "Flask": [
-
-            "What is Flask?",
-
-            "What is a Flask route?",
-
-            "How do templates work in Flask?"
-        ],
-
-        "Git": [
-
-            "What is Git?",
-
-            "What is a Git commit?",
-
-            "What is the difference between git pull and git push?"
-        ],
-
-        "GitHub": [
-
-            "What is GitHub?",
-
-            "What is a repository?",
-
-            "How do you push code to GitHub?"
-        ],
-
-        "OpenAI API": [
-
-            "What is an API?",
-
-            "How can an API be used in an AI application?",
-
-            "What is prompt engineering?"
-        ],
-
-        "PDF Processing": [
-
-            "How can text be extracted from a PDF?",
-
-            "What is PDF processing?",
-
-            "How would you handle a PDF that contains no extractable text?"
-        ],
-
-        "Data Analysis": [
-
-            "What is data analysis?",
-
-            "What is data cleaning?",
-
-            "How can data be visualized?"
-        ],
-
-        "SQL": [
-
-            "What is SQL?",
-
-            "What is the difference between WHERE and HAVING?",
-
-            "What is a JOIN in SQL?"
-        ],
-
-        "MongoDB": [
-
-            "What is MongoDB?",
-
-            "What is a document in MongoDB?",
-
-            "What is the difference between MongoDB and SQL databases?"
-        ],
-
-        "MySQL": [
-
-            "What is MySQL?",
-
-            "What is a primary key?",
-
-            "What is a foreign key?"
-        ],
-
-        "Machine Learning": [
-
-            "What is machine learning?",
-
-            "What is supervised learning?",
-
-            "What is unsupervised learning?"
-        ]
-
-    }
-
-
-    interview_questions = []
-
-
-    for skill in missing_skills:
-
-        if skill in question_data:
-
-            interview_questions.append({
-
-                "topic": skill,
-
-                "questions": question_data[skill]
-            })
-
-
-    interview_questions.append({
+QUESTIONS = {
+
+    "Python": [
+        "What are the main features of Python?",
+        "What is the difference between a list and a tuple?",
+        "What are functions in Python?"
+    ],
+
+    "HTML": [
+        "What is HTML?",
+        "What are semantic HTML elements?",
+        "What is the difference between div and section?"
+    ],
+
+    "CSS": [
+        "What is CSS?",
+        "What is Flexbox?",
+        "What is responsive web design?"
+    ],
+
+    "Flask": [
+        "What is Flask?",
+        "What is a Flask route?",
+        "How do templates work in Flask?"
+    ],
+
+    "Git": [
+        "What is Git?",
+        "What is a Git commit?",
+        "What is the difference between git pull and git push?"
+    ],
+
+    "GitHub": [
+        "What is GitHub?",
+        "What is a repository?",
+        "How do you push code to GitHub?"
+    ],
+
+    "OpenAI API": [
+        "What is an API?",
+        "How can an API be used in an AI application?",
+        "What is prompt engineering?"
+    ],
+
+    "PDF Processing": [
+        "How can text be extracted from a PDF?",
+        "What is PDF processing?",
+        "How would you handle a PDF that contains no extractable text?"
+    ],
+
+    "Data Analysis": [
+        "What is data analysis?",
+        "What is data cleaning?",
+        "How can data be visualized?"
+    ],
+
+    "SQL": [
+        "What is SQL?",
+        "What is the difference between WHERE and HAVING?",
+        "What is a JOIN in SQL?"
+    ],
+
+    "MongoDB": [
+        "What is MongoDB?",
+        "What is a document in MongoDB?",
+        "What is the difference between MongoDB and SQL databases?"
+    ],
+
+    "MySQL": [
+        "What is MySQL?",
+        "What is a primary key?",
+        "What is a foreign key?"
+    ],
+
+    "Machine Learning": [
+        "What is machine learning?",
+        "What is supervised learning?",
+        "What is unsupervised learning?"
+    ]
+
+}
+
+
+def generate_interview_questions(missing):
+
+    result = [
+
+        {
+            "topic": skill,
+            "questions": QUESTIONS[skill]
+        }
+
+        for skill in missing
+        if skill in QUESTIONS
+
+    ]
+
+    result.append({
 
         "topic": "Project",
 
         "questions": [
-
             "Explain your AI Career Readiness Analyzer.",
-
             "Why did you choose this project?",
-
             "What technologies did you use?",
-
             "What challenges did you face while building it?"
         ]
+
     })
 
-
-    return interview_questions
+    return result
 
 
 # --------------------------------------------------
-# SMART RESUME IMPROVEMENT SUGGESTIONS
+# SMART RESUME IMPROVEMENTS
 # --------------------------------------------------
 
 def generate_smart_resume_improvements(
@@ -1302,113 +978,83 @@ def generate_smart_resume_improvements(
 
     suggestions = []
 
-    text_lower = resume_text.lower()
-
-
-    # --------------------------------------------------
-    # PROJECT DESCRIPTION CHECK
-    # --------------------------------------------------
+    low = resume_text.lower()
 
     if projects:
 
-        short_projects = []
-
-        for project in projects:
-
-            words = project.split()
-
-            if len(words) < 12:
-
-                short_projects.append(project)
-
-        if short_projects:
+        if any(
+            len(project.split()) < 12
+            for project in projects
+        ):
 
             suggestions.append({
 
                 "title": "Improve project descriptions",
 
-                "description": (
+                "description":
                     "Some project descriptions are very short. "
                     "Describe what you built, the technologies used, "
-                    "your contribution, and the result."
-                ),
+                    "your contribution, and the result.",
 
-                "example": (
-                    "Instead of: 'Created a Python project.' "
-                    "Write: 'Developed a Python-based application "
-                    "to analyze student performance and generate "
-                    "performance insights.'"
-                )
+                "example":
+                    "Use Action + Technology + Contribution + Result."
+
             })
 
+        project_text = " ".join(
+            projects
+        ).lower()
 
-        # Check for technology mentions
-        project_text = " ".join(projects).lower()
-
-        technology_found = False
-
-        for skill in resume_skills:
-
-            if skill.lower() in project_text:
-
-                technology_found = True
-
-                break
-
-        if not technology_found:
+        if not any(
+            skill.lower() in project_text
+            for skill in resume_skills
+        ):
 
             suggestions.append({
 
-                "title": "Mention technologies in projects",
+                "title":
+                    "Mention technologies in projects",
 
-                "description": (
+                "description":
                     "Your project descriptions do not clearly show "
-                    "which technologies were used."
-                ),
+                    "which technologies were used.",
 
-                "example": (
-                    "Example: 'Developed the application using "
-                    "Python, Flask, HTML and CSS.'"
-                )
+                "example":
+                    "Example: Developed the application using "
+                    "Python, Flask, HTML and CSS."
+
             })
 
-
-        # Contribution check
         contribution_words = [
             "developed",
             "created",
             "designed",
             "implemented",
             "built",
-            "developed",
             "integrated",
             "managed"
         ]
 
-        has_contribution_word = any(
+        if not any(
             word in project_text
             for word in contribution_words
-        )
-
-        if not has_contribution_word:
+        ):
 
             suggestions.append({
 
-                "title": "Show your contribution",
+                "title":
+                    "Show your contribution",
 
-                "description": (
+                "description":
                     "Clearly explain what you personally developed "
-                    "or implemented in each project."
-                ),
+                    "or implemented in each project.",
 
-                "example": (
+                "example":
                     "Use action words such as developed, implemented, "
                     "designed, integrated, tested or built."
-                )
+
             })
 
-
-        # Result / impact check
         result_words = [
             "improved",
             "reduced",
@@ -1421,26 +1067,24 @@ def generate_smart_resume_improvements(
             "faster"
         ]
 
-        has_result = any(
+        if not any(
             word in project_text
             for word in result_words
-        )
-
-        if not has_result:
+        ):
 
             suggestions.append({
 
-                "title": "Add measurable results",
+                "title":
+                    "Add measurable results",
 
-                "description": (
+                "description":
                     "Add measurable results wherever possible. "
-                    "This makes your project achievements clearer."
-                ),
+                    "This makes your project achievements clearer.",
 
-                "example": (
-                    "Example: 'Reduced manual resume screening time "
-                    "by 40% using automated skill extraction.'"
-                )
+                "example":
+                    "Example: Reduced manual resume screening time "
+                    "by 40% using automated skill extraction."
+
             })
 
     else:
@@ -1449,74 +1093,57 @@ def generate_smart_resume_improvements(
 
             "title": "Add projects",
 
-            "description": (
+            "description":
                 "Your resume does not contain clearly detected "
-                "project information."
-            ),
+                "project information.",
 
-            "example": (
+            "example":
                 "Add 2–3 academic or personal projects with "
                 "technologies, features, your contribution and results."
-            )
+
         })
 
-
-    # --------------------------------------------------
-    # GITHUB CHECK
-    # --------------------------------------------------
-
-    if "github.com" not in text_lower:
+    if "github.com" not in low:
 
         suggestions.append({
 
-            "title": "Add GitHub links",
+            "title":
+                "Add GitHub links",
 
-            "description": (
+            "description":
                 "No GitHub profile or repository link was detected "
-                "in the resume."
-            ),
+                "in the resume.",
 
-            "example": (
+            "example":
                 "Add your GitHub profile and repository links "
                 "for important projects."
-            )
+
         })
 
-
-    # --------------------------------------------------
-    # JOB SKILL CHECK
-    # --------------------------------------------------
-
-    missing_job_skills = [
-
+    missing = [
         skill
         for skill in job_skills
         if skill not in resume_skills
     ]
 
-    if missing_job_skills:
+    if missing:
 
         suggestions.append({
 
-            "title": "Add relevant skills",
+            "title":
+                "Add relevant skills",
 
-            "description": (
+            "description":
                 "The resume is missing some skills mentioned in "
-                "the target job description."
-            ),
+                "the target job description.",
 
-            "example": (
-                "Consider adding skills only after you actually "
-                "learn or use them. Missing skills include: "
-                + ", ".join(missing_job_skills[:8])
+            "example":
+                "Learn or use the missing skills before adding them. "
+                "Missing: "
+                + ", ".join(missing[:8])
                 + "."
-            )
+
         })
-
-
-    # --------------------------------------------------
-    # ACTION WORD CHECK
-    # --------------------------------------------------
 
     action_words = [
         "developed",
@@ -1530,51 +1157,253 @@ def generate_smart_resume_improvements(
         "tested"
     ]
 
-    action_word_found = any(
-        word in text_lower
+    if not any(
+        word in low
         for word in action_words
-    )
-
-    if not action_word_found:
+    ):
 
         suggestions.append({
 
-            "title": "Use strong action words",
+            "title":
+                "Use strong action words",
 
-            "description": (
+            "description":
                 "Project and experience descriptions should begin "
-                "with clear action words."
-            ),
+                "with clear action words.",
 
-            "example": (
-                "Use words such as Developed, Built, Designed, "
-                "Implemented, Integrated and Analyzed."
-            )
+            "example":
+                "Use Developed, Built, Designed, Implemented, "
+                "Integrated and Analyzed."
+
         })
-
-
-    # --------------------------------------------------
-    # GENERAL CONTENT CHECK
-    # --------------------------------------------------
 
     suggestions.append({
 
-        "title": "Keep descriptions specific",
+        "title":
+            "Keep descriptions specific",
 
-        "description": (
+        "description":
             "Avoid generic statements such as 'worked on a project' "
             "or 'learned Python'. Explain what you actually built "
-            "and what your contribution was."
-        ),
+            "and your contribution.",
 
-        "example": (
-            "Use the structure: Action + Technology + What you built "
-            "+ Result."
-        )
+        "example":
+            "Use Action + Technology + What you built + Result."
+
     })
 
-
     return suggestions
+
+
+# --------------------------------------------------
+# RESUME STRENGTH / WEAKNESS
+# --------------------------------------------------
+
+def generate_resume_strength_weakness_analysis(
+    resume_text,
+    resume_skills,
+    job_skills,
+    matching,
+    missing,
+    education,
+    projects,
+    certs
+):
+
+    strengths = []
+
+    weaknesses = []
+
+    focus = []
+
+    low = resume_text.lower()
+
+    if resume_skills:
+
+        strengths.append(
+            "The resume contains identifiable technical or professional skills."
+        )
+
+    if matching:
+
+        strengths.append(
+            f"The resume matches {len(matching)} skill(s) from the target job."
+        )
+
+    if projects:
+
+        strengths.append(
+            "Project experience is present in the resume."
+        )
+
+    if education:
+
+        strengths.append(
+            "Educational information is present and can support the target role."
+        )
+
+    if certs:
+
+        strengths.append(
+            "Certifications are included and can strengthen the candidate profile."
+        )
+
+    if "github.com" in low:
+
+        strengths.append(
+            "GitHub links are included in the resume."
+        )
+
+    if not resume_skills:
+
+        weaknesses.append(
+            "No recognizable skills were detected in the resume."
+        )
+
+    elif job_skills and not matching:
+
+        weaknesses.append(
+            "No skills from the target job description were detected in the resume."
+        )
+
+    elif missing:
+
+        weaknesses.append(
+            f"{len(missing)} required job skill(s) are currently missing."
+        )
+
+    if not projects:
+
+        weaknesses.append(
+            "Project experience was not clearly detected."
+        )
+
+    elif any(
+        len(project.split()) < 12
+        for project in projects
+    ):
+
+        weaknesses.append(
+            "Some project descriptions are too short and need more detail."
+        )
+
+    if "github.com" not in low:
+
+        weaknesses.append(
+            "No GitHub profile or repository link was detected."
+        )
+
+    if projects:
+
+        project_text = " ".join(
+            projects
+        ).lower()
+
+        action_words = [
+            "developed",
+            "created",
+            "built",
+            "designed",
+            "implemented",
+            "integrated",
+            "analyzed",
+            "managed",
+            "tested"
+        ]
+
+        if not any(
+            word in project_text
+            for word in action_words
+        ):
+
+            weaknesses.append(
+                "Project descriptions do not clearly show your individual contribution."
+            )
+
+        measurable_words = [
+            "%",
+            "improved",
+            "reduced",
+            "increased",
+            "accuracy",
+            "performance",
+            "users",
+            "faster"
+        ]
+
+        if not any(
+            word in project_text
+            for word in measurable_words
+        ):
+
+            weaknesses.append(
+                "Projects do not clearly mention measurable results or impact."
+            )
+
+    if missing:
+
+        focus.append(
+            "Learn and demonstrate the missing skills required by the target job."
+        )
+
+    if projects:
+
+        focus.append(
+            "Improve project descriptions using Action + Technology + Contribution + Result."
+        )
+
+    else:
+
+        focus.append(
+            "Add relevant academic or personal projects."
+        )
+
+    if "github.com" not in low:
+
+        focus.append(
+            "Add your GitHub profile and important project repositories."
+        )
+
+    if education and not certs:
+
+        focus.append(
+            "Consider adding relevant certifications or courses."
+        )
+
+    if len(weaknesses) <= 2:
+
+        overall = (
+            "The resume has a good basic structure, with only a few areas "
+            "that need improvement."
+        )
+
+    elif len(weaknesses) <= 5:
+
+        overall = (
+            "The resume has a reasonable foundation, but several areas "
+            "can be improved to better match the target role."
+        )
+
+    else:
+
+        overall = (
+            "The resume has a basic foundation, but several important "
+            "areas should be improved before applying for the target role."
+        )
+
+    return {
+
+        "strengths": strengths,
+
+        "weaknesses": weaknesses,
+
+        "areas_to_improve": weaknesses,
+
+        "improvement_focus": focus,
+
+        "overall": overall
+
+    }
 
 
 # --------------------------------------------------
@@ -1582,80 +1411,56 @@ def generate_smart_resume_improvements(
 # --------------------------------------------------
 
 def generate_fallback_analysis(
-    resume_skills,
-    job_skills,
-    matching_skills,
-    missing_skills
+    resume,
+    job,
+    matching,
+    missing
 ):
 
-    if job_skills:
-
-        match_percentage = round(
-            (
-                len(matching_skills)
-                / len(job_skills)
-            ) * 100
+    percent = (
+        round(
+            len(matching) / len(job) * 100
         )
-
-    else:
-
-        match_percentage = 0
-
-
-    if match_percentage >= 75:
-
-        readiness_level = "Advanced"
-
-    elif match_percentage >= 50:
-
-        readiness_level = "Intermediate"
-
-    else:
-
-        readiness_level = "Beginner"
-
-
-    career_summary = (
-        f"Your resume currently matches about "
-        f"{match_percentage}% of the detected job skills. "
-        f"You have {len(matching_skills)} matching skills "
-        f"and {len(missing_skills)} skills that can be improved."
+        if job
+        else 0
     )
 
+    if percent >= 75:
 
-    strengths = [
+        readiness = "Advanced"
 
-        "You already have some skills required for the target role.",
+    elif percent >= 50:
 
-        "Your resume includes project experience.",
+        readiness = "Intermediate"
 
-        "Your educational background is relevant to the target role.",
+    else:
 
-        "You have certifications that can support your profile."
-    ]
-
-
-    recommendations = [
-
-        "Learn the missing technical skills required by the target job.",
-
-        "Add practical projects that demonstrate the required technologies.",
-
-        "Use Git and GitHub to maintain and showcase your projects.",
-
-        "Improve your resume by clearly describing project impact and technologies used."
-    ]
-
+        readiness = "Beginner"
 
     return {
 
-        "career_summary": career_summary,
+        "career_summary":
+            f"Your resume currently matches about {percent}% "
+            f"of the detected job skills. You have "
+            f"{len(matching)} matching skills and "
+            f"{len(missing)} skills that can be improved.",
 
-        "strengths": strengths,
+        "strengths": [
+            "You already have some skills required for the target role.",
+            "Your resume includes project experience.",
+            "Your educational background is relevant to the target role.",
+            "You have certifications that can support your profile."
+        ],
 
-        "recommendations": recommendations,
+        "recommendations": [
+            "Learn the missing technical skills required by the target job.",
+            "Add practical projects that demonstrate the required technologies.",
+            "Use Git and GitHub to maintain and showcase your projects.",
+            "Improve your resume by clearly describing project impact and technologies used."
+        ],
 
-        "readiness_level": readiness_level
+        "readiness_level": readiness
+
     }
 
 
@@ -1664,70 +1469,50 @@ def generate_fallback_analysis(
 # --------------------------------------------------
 
 def generate_ai_analysis(
-    resume_skills,
-    job_skills,
-    matching_skills,
-    missing_skills
+    resume,
+    job,
+    matching,
+    missing
 ):
 
     fallback = generate_fallback_analysis(
-        resume_skills,
-        job_skills,
-        matching_skills,
-        missing_skills
+        resume,
+        job,
+        matching,
+        missing
     )
-
 
     if client:
 
         try:
 
             prompt = f"""
-You are a career readiness assistant.
-
 Resume Skills:
-{resume_skills}
+{resume}
 
 Required Job Skills:
-{job_skills}
+{job}
 
 Matching Skills:
-{matching_skills}
+{matching}
 
 Missing Skills:
-{missing_skills}
+{missing}
 
 Provide a concise career analysis.
-
-Return:
-
-Career Summary
-
-Strengths
-
-Recommendations
-
-Readiness Level
-
-Do not invent skills that are not present.
+Do not invent skills.
 """
 
-
             response = client.responses.create(
-
                 model="gpt-5.6",
-
                 input=prompt
             )
 
+            if response.output_text:
 
-            ai_text = response.output_text
-
-
-            if ai_text:
-
-                fallback["career_summary"] = ai_text
-
+                fallback["career_summary"] = (
+                    response.output_text
+                )
 
         except Exception as e:
 
@@ -1736,19 +1521,225 @@ Do not invent skills that are not present.
                 e
             )
 
-
     return fallback
 
 
 # --------------------------------------------------
-# HOME ROUTE
+# AI JOB MATCH
 # --------------------------------------------------
 
-@app.route(
-    "/",
-    methods=["GET"]
-)
+def generate_ai_job_match(
+    resume,
+    job,
+    projects,
+    education,
+    certs=None,
+    resume_text=""
+):
 
+    matching = [
+        skill
+        for skill in job
+        if skill in resume
+    ]
+
+    technical = (
+        round(
+            len(matching) / len(job) * 100
+        )
+        if job
+        else 0
+    )
+
+    project_rel = 0
+
+    if projects:
+
+        project_text = " ".join(
+            projects
+        ).lower()
+
+        coverage = (
+            len([
+                skill
+                for skill in job
+                if skill.lower() in project_text
+            ])
+            / len(job)
+            * 100
+            if job
+            else 0
+        )
+
+        quality = 40
+
+        if len(projects) >= 2:
+
+            quality += 20
+
+        if any(
+            word in project_text
+            for word in [
+                "developed",
+                "built",
+                "created",
+                "designed",
+                "implemented",
+                "integrated",
+                "tested"
+            ]
+        ):
+
+            quality += 15
+
+        if any(
+            word in project_text
+            for word in [
+                "%",
+                "improved",
+                "reduced",
+                "increased",
+                "accuracy",
+                "performance",
+                "users",
+                "result"
+            ]
+        ):
+
+            quality += 15
+
+        if any(
+            skill.lower() in project_text
+            for skill in resume
+        ):
+
+            quality += 10
+
+        project_rel = min(
+            round(
+                coverage * 0.5
+                + quality * 0.5
+            ),
+            100
+        )
+
+    education_rel = 0
+
+    if education:
+
+        education_text = " ".join(
+            education
+        ).lower()
+
+        if any(
+            keyword in education_text
+            for keyword in [
+                "computer science",
+                "information technology",
+                "engineering",
+                "b.tech",
+                "btech",
+                "b.e",
+                "bachelor"
+            ]
+        ):
+
+            education_rel = 100
+
+        else:
+
+            education_rel = 70
+
+    soft_skills = [
+        "Communication",
+        "Teamwork",
+        "Problem Solving"
+    ]
+
+    soft = round(
+        len([
+            skill
+            for skill in soft_skills
+            if skill in resume
+        ])
+        / 3
+        * 100
+    )
+
+    cert = 100 if certs else 0
+
+    overall = round(
+
+        technical * 0.45
+
+        + project_rel * 0.25
+
+        + education_rel * 0.10
+
+        + soft * 0.10
+
+        + cert * 0.10
+
+    )
+
+    missing = [
+        skill
+        for skill in job
+        if skill not in resume
+    ]
+
+    return {
+
+        "overall_score": overall,
+
+        "technical_skill_match": technical,
+
+        "project_relevance": project_rel,
+
+        "education_relevance": education_rel,
+
+        "soft_skill_match": soft,
+
+        "certification_relevance": cert,
+
+        "matching_skills": matching,
+
+        "missing_skills": missing,
+
+        "matching_summary":
+            (
+                "Matching skills: "
+                + ", ".join(matching)
+                if matching
+                else
+                "No matching job skills were detected."
+            ),
+
+        "missing_summary":
+            (
+                "Skills to improve: "
+                + ", ".join(missing)
+                if missing
+                else
+                "No missing skills were detected from the known skill list."
+            ),
+
+        "explanation":
+            (
+                "The resume shows moderate alignment with the target role."
+                if overall >= 50
+                else
+                "The resume currently shows limited alignment with the target role."
+            )
+
+    }
+
+
+# --------------------------------------------------
+# HOME
+# --------------------------------------------------
+
+@app.route("/")
 def home():
 
     return render_template(
@@ -1757,31 +1748,27 @@ def home():
 
 
 # --------------------------------------------------
-# UPLOAD ROUTE
+# UPLOAD
 # --------------------------------------------------
 
 @app.route(
     "/upload",
     methods=["POST"]
 )
-
 def upload():
 
     resume_file = request.files.get(
         "resume"
     )
 
-
     job_description = request.form.get(
         "job_description",
         ""
     )
 
-
     if not resume_file:
 
         return "Please upload a resume PDF."
-
 
     if not resume_file.filename.lower().endswith(
         ".pdf"
@@ -1789,216 +1776,129 @@ def upload():
 
         return "Please upload a PDF file."
 
-
-    # --------------------------------------------------
-    # SAVE FILE
-    # --------------------------------------------------
-
     file_path = os.path.join(
         UPLOAD_FOLDER,
         resume_file.filename
     )
 
-
     resume_file.save(
         file_path
     )
 
-
-    # --------------------------------------------------
-    # EXTRACT RESUME TEXT
-    # --------------------------------------------------
-
-    raw_text = extract_pdf_text(
-        file_path
-    )
-
-
     resume_text = clean_text(
-        raw_text
+        extract_pdf_text(
+            file_path
+        )
     )
-
-
-    # --------------------------------------------------
-    # EXTRACT RESUME INFORMATION
-    # --------------------------------------------------
 
     resume_skills = extract_skills(
         resume_text
     )
 
-
     education = extract_education(
         resume_text
     )
-
 
     projects = extract_projects(
         resume_text
     )
 
-
     certifications = extract_certifications(
         resume_text
     )
-
-
-    # --------------------------------------------------
-    # EXTRACT JOB INFORMATION
-    # --------------------------------------------------
 
     job_skills = extract_job_skills(
         job_description
     )
 
-
-    # --------------------------------------------------
-    # MATCHING SKILLS
-    # --------------------------------------------------
-
     matching_skills = [
-
         skill
-
         for skill in job_skills
-
         if skill in resume_skills
     ]
 
-
     missing_skills = generate_skill_gaps(
-
         resume_skills,
-
         job_skills
     )
 
-
-    # --------------------------------------------------
-    # IMPROVED RESUME SCORE
-    # --------------------------------------------------
-
     resume_score = calculate_resume_score(
-
         resume_skills,
-
         job_skills,
-
         education,
-
         projects,
-
         certifications
     )
 
-
-    # --------------------------------------------------
-    # RULE-BASED JOB MATCH
-    # --------------------------------------------------
-
     job_match = calculate_job_match(
-
         resume_skills,
-
         job_skills
     )
-
-
-    # --------------------------------------------------
-    # AI CAREER ANALYSIS
-    # --------------------------------------------------
 
     ai_analysis = generate_ai_analysis(
-
         resume_skills,
-
         job_skills,
-
         matching_skills,
-
         missing_skills
     )
-
-
-    # --------------------------------------------------
-    # AI JOB MATCH
-    # --------------------------------------------------
 
     ai_job_match = generate_ai_job_match(
-
         resume_skills,
-
         job_skills,
-
         projects,
-
-        education
+        education,
+        certifications,
+        resume_text
     )
 
-
-    # --------------------------------------------------
-    # PRIORITY SKILL GAPS
-    # --------------------------------------------------
-
-    priority_skill_gaps = generate_priority_skill_gaps(
-
-        missing_skills
+    priority_skill_gaps = (
+        generate_priority_skill_gaps(
+            missing_skills
+        )
     )
-
-
-    # --------------------------------------------------
-    # LEARNING ROADMAP
-    # --------------------------------------------------
 
     roadmap = generate_learning_roadmap(
-
         missing_skills
     )
 
-
-    # --------------------------------------------------
-    # RECOMMENDED PROJECTS
-    # --------------------------------------------------
-
-    recommended_projects = generate_recommended_projects(
-
-        missing_skills
+    recommended_projects = (
+        generate_recommended_projects(
+            missing_skills
+        )
     )
 
-
-    # --------------------------------------------------
-    # INTERVIEW QUESTIONS
-    # --------------------------------------------------
-
-    interview_questions = generate_interview_questions(
-
-        missing_skills
+    interview_questions = (
+        generate_interview_questions(
+            missing_skills
+        )
     )
 
-
-    # --------------------------------------------------
-    # SMART RESUME IMPROVEMENTS
-    # --------------------------------------------------
-
-    smart_improvements = generate_smart_resume_improvements(
-
-        resume_text,
-
-        resume_skills,
-
-        projects,
-
-        job_skills
+    smart_improvements = (
+        generate_smart_resume_improvements(
+            resume_text,
+            resume_skills,
+            projects,
+            job_skills
+        )
     )
 
-
-    # --------------------------------------------------
-    # RESUME IMPROVEMENT
-    # --------------------------------------------------
+    resume_analysis = (
+        generate_resume_strength_weakness_analysis(
+            resume_text,
+            resume_skills,
+            job_skills,
+            matching_skills,
+            missing_skills,
+            education,
+            projects,
+            certifications
+        )
+    )
 
     resume_improvement = {
 
-        "missing_skills": missing_skills,
+        "missing_skills":
+            missing_skills,
 
         "content_improvements": [
 
@@ -2007,6 +1907,7 @@ def upload():
             "Mention the technologies used in each project.",
 
             "Add measurable results wherever possible."
+
         ],
 
         "project_improvements": [
@@ -2016,22 +1917,19 @@ def upload():
             "Mention important features and technologies.",
 
             "Add GitHub links for completed projects."
+
         ],
 
-        "resume_strengths": ai_analysis.get(
+        "resume_strengths":
+            ai_analysis.get(
+                "strengths",
+                []
+            ),
 
-            "strengths",
+        "smart_improvements":
+            smart_improvements
 
-            []
-        ),
-
-        "smart_improvements": smart_improvements
     }
-
-
-    # --------------------------------------------------
-    # RENDER RESULTS
-    # --------------------------------------------------
 
     return render_template(
 
@@ -2052,46 +1950,47 @@ def upload():
         skill_gaps=missing_skills,
 
         career_summary=ai_analysis.get(
-
             "career_summary",
-
             ""
         ),
 
         strengths=ai_analysis.get(
-
             "strengths",
-
             []
         ),
 
         recommendations=ai_analysis.get(
-
             "recommendations",
-
             []
         ),
 
         readiness_level=ai_analysis.get(
-
             "readiness_level",
-
             "Beginner"
         ),
 
         ai_job_match=ai_job_match,
 
-        priority_skill_gaps=priority_skill_gaps,
+        priority_skill_gaps=
+            priority_skill_gaps,
 
         roadmap=roadmap,
 
-        recommended_projects=recommended_projects,
+        recommended_projects=
+            recommended_projects,
 
-        interview_questions=interview_questions,
+        interview_questions=
+            interview_questions,
 
-        resume_improvement=resume_improvement,
+        resume_improvement=
+            resume_improvement,
 
-        smart_improvements=smart_improvements
+        smart_improvements=
+            smart_improvements,
+
+        resume_analysis=
+            resume_analysis
+
     )
 
 
